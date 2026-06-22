@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: ap-south-1
   ECR_REPOSITORY: todo-app
   ECS_CLUSTER: todo-app-cluster
   ECS_SERVICE: todo-app-service
