@@ -28,6 +28,7 @@ async function waitForDb(retries = 30, delayMs = 5000) {
 }
 
 async function start() {
+  console.log(`Starting app build=${process.env.BUILD_SHA || 'unknown'}`);
   await waitForDb();
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

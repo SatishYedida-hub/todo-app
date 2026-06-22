@@ -13,6 +13,7 @@ env:
   ECR_REPOSITORY: todo-app
   ECS_CLUSTER: todo-app-cluster
   ECS_SERVICE: todo-app-service
+  TASK_FAMILY: todo-app
 
 jobs:
   deploy:
@@ -56,7 +57,9 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build \
+            --build-arg BUILD_SHA=$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
       - name: Push image to Amazon ECR
@@ -68,12 +71,37 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
       - name: Deploy updated image to ECS
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          echo "Deploying to cluster=$ECS_CLUSTER service=$ECS_SERVICE region=$AWS_REGION"
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "Deploying image: $IMAGE_URI"
+
+          # Register new task definition with the exact image digest tag (avoids stale :latest cache)
+          TASK_DEF=$(aws ecs describe-task-definition \
+            --task-definition "$TASK_FAMILY" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition' \
+            --output json)
+
+          NEW_TASK_DEF=$(echo "$TASK_DEF" | jq \
+            --arg IMAGE "$IMAGE_URI" \
+            'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
+             | .containerDefinitions[0].image = $IMAGE')
+
+          NEW_TASK_ARN=$(aws ecs register-task-definition \
+            --region "$AWS_REGION" \
+            --cli-input-json "$NEW_TASK_DEF" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          echo "Registered task definition: $NEW_TASK_ARN"
 
           aws ecs update-service \
             --cluster "$ECS_CLUSTER" \
             --service "$ECS_SERVICE" \
+            --task-definition "$NEW_TASK_ARN" \
             --force-new-deployment \
             --region "$AWS_REGION"
 

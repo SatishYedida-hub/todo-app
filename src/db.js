@@ -14,33 +14,41 @@ function buildConnectionString() {
   return `postgresql://${user}:${password}@${host}:${port}/${database}`;
 }
 
-function isLocalConnection(connectionString) {
-  if (process.env.DB_SSL === 'false') return true;
-  return /@(localhost|127\.0\.0\.1|db)(:|\/)/.test(connectionString);
+function parseConnectionString(connectionString) {
+  const normalized = connectionString
+    .replace(/^postgresql:\/\//, 'https://')
+    .replace(/^postgres:\/\//, 'https://');
+
+  const url = new URL(normalized);
+
+  return {
+    host: url.hostname,
+    port: Number(url.port) || 5432,
+    database: decodeURIComponent(url.pathname.slice(1).split('?')[0]),
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+  };
+}
+
+function shouldUseSsl(host) {
+  if (process.env.DB_SSL === 'false') return false;
+  if (process.env.DB_SSL === 'true') return true;
+  if (host === 'localhost' || host === '127.0.0.1' || host === 'db') return false;
+  return true;
 }
 
 function getPoolConfig() {
-  const connectionString = buildConnectionString();
-  const useSsl =
-    process.env.DB_SSL === 'true' || !isLocalConnection(connectionString);
+  const parsed = parseConnectionString(buildConnectionString());
+  const config = { ...parsed };
 
-  if (!useSsl) {
-    return { connectionString };
+  if (shouldUseSsl(parsed.host)) {
+    config.ssl = { rejectUnauthorized: false };
   }
 
-  // RDS requires SSL — use explicit host config (more reliable than connectionString + ssl)
-  const url = new URL(connectionString.replace(/^postgresql:\/\//, 'https://'));
+  console.log(
+    `DB config: host=${parsed.host} ssl=${Boolean(config.ssl)} DB_SSL=${process.env.DB_SSL || 'unset'}`
+  );
 
-  const config = {
-    host: url.hostname,
-    port: Number(url.port) || 5432,
-    database: decodeURIComponent(url.pathname.slice(1)),
-    user: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
-    ssl: { rejectUnauthorized: false },
-  };
-
-  console.log(`DB connecting to ${config.host}:${config.port}/${config.database} (SSL enabled)`);
   return config;
 }
 

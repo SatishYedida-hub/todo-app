@@ -20,6 +20,7 @@ services:
     environment:
       PORT: 3000
       DATABASE_URL: postgresql://postgres:postgres@db:5432/todoapp
+      DB_SSL: "false"
       JWT_SECRET: dev-secret-key
     depends_on:
       db:
