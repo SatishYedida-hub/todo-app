@@ -1,12 +1,22 @@
 const { Pool } = require('pg');
 
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME || 'todoapp',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-});
+function getPoolConfig() {
+  if (process.env.DATABASE_URL) {
+    return { connectionString: process.env.DATABASE_URL };
+  }
+
+  const host = process.env.DB_HOST || 'localhost';
+  const port = process.env.DB_PORT || 5432;
+  const database = process.env.DB_NAME || 'todoapp';
+  const user = process.env.DB_USER || 'postgres';
+  const password = process.env.DB_PASSWORD || 'postgres';
+
+  return {
+    connectionString: `postgresql://${user}:${password}@${host}:${port}/${database}`,
+  };
+}
+
+const pool = new Pool(getPoolConfig());
 
 async function initDb() {
   await pool.query(`

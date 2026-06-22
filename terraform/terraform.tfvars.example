@@ -1,0 +1,6 @@
+aws_region   = "us-east-1"
+project_name = "todo-app"
+image_tag    = "latest"
+
+# Optional: set a fixed JWT secret (otherwise auto-generated)
+# jwt_secret = "your-production-secret"

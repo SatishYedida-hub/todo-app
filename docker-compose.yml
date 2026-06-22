@@ -19,11 +19,7 @@ services:
       - "3000:3000"
     environment:
       PORT: 3000
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: todoapp
-      DB_USER: postgres
-      DB_PASSWORD: postgres
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/todoapp
       JWT_SECRET: dev-secret-key
     depends_on:
       db:

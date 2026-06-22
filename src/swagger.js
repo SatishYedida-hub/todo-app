@@ -8,7 +8,7 @@ const options = {
       version: '1.0.0',
       description: 'REST API for managing todos with JWT authentication',
     },
-    servers: [{ url: 'http://localhost:3000' }],
+    servers: [{ url: process.env.API_URL || 'http://localhost:3000' }],
     components: {
       securitySchemes: {
         bearerAuth: {
