@@ -44,6 +44,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Resolve ECS cluster and service
+        run: bash scripts/resolve-ecs-targets.sh
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -66,15 +69,17 @@ jobs:
 
       - name: Deploy updated image to ECS
         run: |
+          echo "Deploying to cluster=$ECS_CLUSTER service=$ECS_SERVICE region=$AWS_REGION"
+
           aws ecs update-service \
-            --cluster $ECS_CLUSTER \
-            --service $ECS_SERVICE \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
             --force-new-deployment \
-            --region $AWS_REGION
+            --region "$AWS_REGION"
 
           aws ecs wait services-stable \
-            --cluster $ECS_CLUSTER \
-            --services $ECS_SERVICE \
-            --region $AWS_REGION
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --region "$AWS_REGION"
 
           echo "Deployment complete."
