@@ -1,30 +1,46 @@
 const { Pool } = require('pg');
 
-function getPoolConfig() {
-  let connectionString;
-
+function buildConnectionString() {
   if (process.env.DATABASE_URL) {
-    connectionString = process.env.DATABASE_URL;
-  } else {
-    const host = process.env.DB_HOST || 'localhost';
-    const port = process.env.DB_PORT || 5432;
-    const database = process.env.DB_NAME || 'todoapp';
-    const user = process.env.DB_USER || 'postgres';
-    const password = process.env.DB_PASSWORD || 'postgres';
-    connectionString = `postgresql://${user}:${password}@${host}:${port}/${database}`;
+    return process.env.DATABASE_URL;
   }
 
-  const config = { connectionString };
+  const host = process.env.DB_HOST || 'localhost';
+  const port = process.env.DB_PORT || 5432;
+  const database = process.env.DB_NAME || 'todoapp';
+  const user = process.env.DB_USER || 'postgres';
+  const password = process.env.DB_PASSWORD || 'postgres';
 
-  // RDS requires SSL; local Docker Postgres does not
+  return `postgresql://${user}:${password}@${host}:${port}/${database}`;
+}
+
+function isLocalConnection(connectionString) {
+  if (process.env.DB_SSL === 'false') return true;
+  return /@(localhost|127\.0\.0\.1|db)(:|\/)/.test(connectionString);
+}
+
+function getPoolConfig() {
+  const connectionString = buildConnectionString();
   const useSsl =
-    process.env.DB_SSL === 'true' ||
-    (process.env.DB_SSL !== 'false' && connectionString.includes('rds.amazonaws.com'));
+    process.env.DB_SSL === 'true' || !isLocalConnection(connectionString);
 
-  if (useSsl) {
-    config.ssl = { rejectUnauthorized: false };
+  if (!useSsl) {
+    return { connectionString };
   }
 
+  // RDS requires SSL — use explicit host config (more reliable than connectionString + ssl)
+  const url = new URL(connectionString.replace(/^postgresql:\/\//, 'https://'));
+
+  const config = {
+    host: url.hostname,
+    port: Number(url.port) || 5432,
+    database: decodeURIComponent(url.pathname.slice(1)),
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    ssl: { rejectUnauthorized: false },
+  };
+
+  console.log(`DB connecting to ${config.host}:${config.port}/${config.database} (SSL enabled)`);
   return config;
 }
 

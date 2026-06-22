@@ -59,7 +59,7 @@ resource "aws_ecs_task_definition" "app" {
 
     environment = [
       { name = "PORT", value = tostring(var.app_port) },
-      { name = "DATABASE_URL", value = "postgresql://${var.db_username}:${random_password.db_password.result}@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${var.db_name}" },
+      { name = "DATABASE_URL", value = "postgresql://${var.db_username}:${random_password.db_password.result}@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${var.db_name}?sslmode=require" },
       { name = "DB_SSL", value = "true" },
       { name = "JWT_SECRET", value = local.jwt_secret },
       { name = "API_URL", value = "http://${aws_lb.main.dns_name}" }

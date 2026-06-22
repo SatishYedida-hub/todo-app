@@ -35,7 +35,7 @@ output "swagger_url" {
 
 output "database_url" {
   description = "PostgreSQL connection URL for the app"
-  value       = "postgresql://${var.db_username}:${random_password.db_password.result}@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${var.db_name}"
+  value       = "postgresql://${var.db_username}:${random_password.db_password.result}@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${var.db_name}?sslmode=require"
   sensitive   = true
 }
 
