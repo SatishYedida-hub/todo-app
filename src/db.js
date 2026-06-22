@@ -1,19 +1,31 @@
 const { Pool } = require('pg');
 
 function getPoolConfig() {
+  let connectionString;
+
   if (process.env.DATABASE_URL) {
-    return { connectionString: process.env.DATABASE_URL };
+    connectionString = process.env.DATABASE_URL;
+  } else {
+    const host = process.env.DB_HOST || 'localhost';
+    const port = process.env.DB_PORT || 5432;
+    const database = process.env.DB_NAME || 'todoapp';
+    const user = process.env.DB_USER || 'postgres';
+    const password = process.env.DB_PASSWORD || 'postgres';
+    connectionString = `postgresql://${user}:${password}@${host}:${port}/${database}`;
   }
 
-  const host = process.env.DB_HOST || 'localhost';
-  const port = process.env.DB_PORT || 5432;
-  const database = process.env.DB_NAME || 'todoapp';
-  const user = process.env.DB_USER || 'postgres';
-  const password = process.env.DB_PASSWORD || 'postgres';
+  const config = { connectionString };
 
-  return {
-    connectionString: `postgresql://${user}:${password}@${host}:${port}/${database}`,
-  };
+  // RDS requires SSL; local Docker Postgres does not
+  const useSsl =
+    process.env.DB_SSL === 'true' ||
+    (process.env.DB_SSL !== 'false' && connectionString.includes('rds.amazonaws.com'));
+
+  if (useSsl) {
+    config.ssl = { rejectUnauthorized: false };
+  }
+
+  return config;
 }
 
 const pool = new Pool(getPoolConfig());
