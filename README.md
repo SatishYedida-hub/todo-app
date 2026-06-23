@@ -67,34 +67,64 @@ Automated pipeline deploys to ECS on every push to `main`:
 
 See [.github/README.md](.github/README.md) for IAM policy and full setup.
 
-## Run locally (without Docker)
+## Monitoring
 
-1. Start PostgreSQL and create a database named `todoapp`.
-2. Copy `.env.example` to `.env` and adjust values.
-3. Install and start:
-
+### Docker (Local)
+Monitor CPU and memory usage:
 ```bash
-npm install
-npm start
+docker stats
 ```
 
-## Quick test
-
+### AWS CloudWatch (ECS)
+View metrics:
 ```bash
-# Sign up
-curl -X POST http://localhost:3000/auth/signup \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"secret123"}'
-
-# Login
-curl -X POST http://localhost:3000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"secret123"}'
-
-# Create todo (replace TOKEN)
-curl -X POST http://localhost:3000/todos \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer TOKEN" \
-  -d '{"title":"Buy milk","completed":false}'
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/ECS \
+  --metric-name CPUUtilization \
+  --dimensions Name=ServiceName,Value=todo-app-service \
+  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
+  --period 60 \
+  --statistics Average
 ```
 
+View logs:
+```bash
+aws logs tail /ecs/todo-app --follow
+```
+
+## Debugging
+
+### Health Check
+```bash
+curl http://localhost:3000/health
+```
+
+### View Logs
+**Local (Docker):**
+```bash
+docker logs -f todo-app
+```
+
+**AWS (ECS):**
+```bash
+aws logs tail /ecs/todo-app --follow
+```
+
+### Check Database Connection
+```bash
+# Test connection
+psql -U postgres -h localhost -d todoapp -c "SELECT 1;"
+
+# View todos table
+psql -U postgres -d todoapp -c "SELECT * FROM todos LIMIT 5;"
+```
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| Database connection error | Check `DATABASE_URL` is set in `.env` or ECS |
+| JWT auth fails | Verify `JWT_SECRET` is same everywhere |
+| Slow API | Check database indexes: `CREATE INDEX idx_user_id ON todos(user_id);` |
+| Container memory error | Increase container memory in Terraform task definition |
