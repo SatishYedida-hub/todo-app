@@ -23,60 +23,181 @@ A simple Todo REST API built with Node.js, Express, PostgreSQL, and JWT authenti
 | PUT    | /todos/:id      | Yes  | Update todo        |
 | DELETE | /todos/:id      | Yes  | Delete todo        |
 
-## Run with Docker (local)
+## Setup & Local Development
+
+### Prerequisites
+
+- [Docker](https://www.docker.com/products/docker-desktop) installed and running
+- [Git](https://git-scm.com/) installed
+
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/SatishYedida-hub/todo-app.git
+cd todo-app
+```
+
+### Step 2: Run with Docker (Easiest)
 
 ```bash
 docker compose up --build
 ```
 
-- API: http://localhost:3000
-- Swagger: http://localhost:3000/api-docs
+This starts:
+- **API Server** - http://localhost:3000
+- **PostgreSQL Database** - localhost:5432
+- **Swagger UI** - http://localhost:3000/api-docs
 
-## AWS Deployment (ECS Fargate)
+Wait for all services to be healthy (about 10-15 seconds).
 
-Deploy to AWS using Terraform (ECR + ECS Fargate + ALB + RDS):
-
-```powershell
-# Windows
-.\scripts\deploy-aws.ps1
-```
+### Step 3: Test the API
 
 ```bash
-# Linux / macOS
-./scripts/deploy-aws.sh
+# Sign up a new user
+curl -X POST http://localhost:3000/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}'
+
+# Login to get JWT token
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}'
+
+# Copy the token from login response and use it in requests
+# Replace TOKEN with actual token
+curl -X POST http://localhost:3000/todos \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer TOKEN" \
+  -d '{"title":"Buy groceries","completed":false}'
 ```
 
-See [terraform/README.md](terraform/README.md) for full details.
+### Step 4: Stop the Application
 
-After deploy:
-- **Health:** `http://<alb-dns>/health`
-- **Swagger:** `http://<alb-dns>/api-docs`
+```bash
+docker compose down
+```
 
-Get URLs: `cd terraform && terraform output`
+---
 
-## CI/CD (GitHub Actions)
+## AWS Deployment (Production)
 
-Automated pipeline deploys to ECS on every push to `main`:
+### Prerequisites
 
-1. Checkout code
-2. Build Docker image
-3. Push image to Amazon ECR
-4. Deploy updated image to ECS
+- AWS account with appropriate permissions
+- [AWS CLI](https://aws.amazon.com/cli/) installed and configured
+- [Terraform](https://www.terraform.io/downloads) installed
 
-**Setup:** Add GitHub Secrets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, then push to `main`.
+### Step 1: Create AWS Infrastructure
 
-See [.github/README.md](.github/README.md) for IAM policy and full setup.
+Navigate to the terraform directory and create resources:
+
+```bash
+cd terraform
+terraform init
+terraform apply
+```
+
+Terraform will create:
+- VPC and networking
+- ECS Fargate cluster
+- RDS PostgreSQL database
+- Application Load Balancer (ALB)
+- ECR repository for Docker images
+
+This takes about 10-15 minutes.
+
+### Step 2: Get AWS Outputs
+
+After `terraform apply` completes, get your URLs:
+
+```bash
+cd terraform
+terraform output health_url
+terraform output swagger_url
+```
+
+Save these URLs for later use.
+
+### Step 3: Set Up GitHub Secrets (for CI/CD)
+
+To enable automatic deployments from GitHub:
+
+1. Go to GitHub repo → **Settings** → **Secrets and variables** → **Actions**
+2. Click **New repository secret** and add:
+   - Name: `AWS_ACCESS_KEY_ID` | Value: Your AWS access key
+   - Name: `AWS_SECRET_ACCESS_KEY` | Value: Your AWS secret key
+
+You can get these from AWS IAM console.
+
+### Step 4: Push Code to Deploy
+
+```bash
+git add .
+git commit -m "Your changes"
+git push origin main
+```
+
+GitHub Actions will automatically:
+1. Build Docker image
+2. Push to AWS ECR
+3. Deploy to ECS
+4. Restart the service
+
+Check the deployment status in GitHub → **Actions**.
+
+### Step 5: Access Your API
+
+Once deployment completes (5-10 minutes):
+
+- **Health Check:** `http://<alb-dns>/health`
+- **Swagger UI:** `http://<alb-dns>/api-docs`
+- **API Base URL:** `http://<alb-dns>`
+
+Use the same curl commands as local testing, but replace `localhost:3000` with your ALB URL.
+
+---
+
+## Project Structure
+
+```
+todo-app/
+├── src/
+│   ├── index.js           # Application entry point
+│   ├── server.js          # Express server setup
+│   ├── routes/            # API routes
+│   ├── middleware/        # JWT auth, error handling
+│   ├── models/            # Database models
+│   └── config/            # Configuration
+├── Dockerfile             # Container image definition
+├── docker-compose.yml     # Local development setup
+├── terraform/             # AWS infrastructure code
+│   ├── main.tf            # Main infrastructure
+│   ├── variables.tf       # Terraform variables
+│   └── outputs.tf         # Output values
+├── .github/workflows/     # CI/CD pipeline
+│   └── deploy.yml         # GitHub Actions workflow
+├── package.json           # Node.js dependencies
+└── README.md              # This file
+```
+
+---
 
 ## Monitoring
 
-### Docker (Local)
-Monitor CPU and memory usage:
+### Monitor Local Container
+
 ```bash
 docker stats
 ```
 
-### AWS CloudWatch (ECS)
-View metrics:
+### Monitor AWS Deployment
+
+View logs in CloudWatch:
+```bash
+aws logs tail /ecs/todo-app --follow
+```
+
+View CPU/Memory metrics:
 ```bash
 aws cloudwatch get-metric-statistics \
   --namespace AWS/ECS \
@@ -88,43 +209,84 @@ aws cloudwatch get-metric-statistics \
   --statistics Average
 ```
 
-View logs:
-```bash
-aws logs tail /ecs/todo-app --follow
-```
+---
 
 ## Debugging
 
-### Health Check
+### Check Health
+
 ```bash
 curl http://localhost:3000/health
 ```
 
 ### View Logs
-**Local (Docker):**
+
+Local Docker:
 ```bash
 docker logs -f todo-app
 ```
 
-**AWS (ECS):**
+AWS ECS:
 ```bash
 aws logs tail /ecs/todo-app --follow
-```
-
-### Check Database Connection
-```bash
-# Test connection
-psql -U postgres -h localhost -d todoapp -c "SELECT 1;"
-
-# View todos table
-psql -U postgres -d todoapp -c "SELECT * FROM todos LIMIT 5;"
 ```
 
 ### Common Issues
 
 | Issue | Solution |
 |-------|----------|
-| Database connection error | Check `DATABASE_URL` is set in `.env` or ECS |
-| JWT auth fails | Verify `JWT_SECRET` is same everywhere |
-| Slow API | Check database indexes: `CREATE INDEX idx_user_id ON todos(user_id);` |
-| Container memory error | Increase container memory in Terraform task definition |
+| Container won't start | Run `docker logs todo-app` to see error |
+| Database connection error | Ensure `DATABASE_URL` is correct in `.env` |
+| JWT authentication fails | Check `JWT_SECRET` is set in environment |
+| Slow API responses | Check CloudWatch logs for database errors |
+| Port 3000 already in use | Run `docker kill <container>` or use different port |
+
+---
+
+## Clean Up
+
+### Local
+```bash
+docker compose down
+```
+
+### AWS (Delete all resources)
+```bash
+cd terraform
+terraform destroy
+```
+
+**Warning:** This deletes all AWS resources and cannot be undone.
+
+---
+
+## Environment Variables
+
+### Local (.env file)
+```
+PORT=3000
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/todoapp
+JWT_SECRET=dev-secret-key
+API_URL=http://localhost:3000
+```
+
+### AWS (Set automatically by Terraform)
+- `DATABASE_URL` - RDS connection string
+- `JWT_SECRET` - Auto-generated
+- `PORT` - 3000
+- `API_URL` - ALB DNS name
+
+---
+
+## Repository Links
+
+- **GitHub:** https://github.com/SatishYedida-hub/todo-app
+- **Live API:** `http://<alb-dns>` (after AWS deployment)
+- **Swagger Docs:** `http://<alb-dns>/api-docs` (after AWS deployment)
+
+## Support
+
+For issues or questions:
+1. Check the logs with commands above
+2. Review [Terraform README](terraform/README.md) for AWS details
+3. Review [CI/CD README](.github/README.md) for deployment pipeline
